@@ -113,60 +113,6 @@ Each event should follow this structure:
 }
 ```
 
-## 📁 Project Structure
-
-```plaintext
-wikimapa/
-├── app/                  # Next.js App Router
-│   ├── api/              # API routes
-│   │   └── submit/       # Event submission endpoint
-│   ├── globals.css       # Global styles
-│   ├── layout.tsx        # Root layout
-│   └── page.tsx          # Home page
-├── components/           # React components
-│   ├── map-component.tsx # Main map component
-│   ├── map-fallback.tsx  # Fallback for map loading errors
-│   └── submit-event-modal.tsx # Event submission form
-├── public/               # Static assets
-│   └── data/             # JSON data files
-│       └── wikimapa.json # Historical events data
-└── README.md             # This file
-```
-
-## 🔍 Usage
-
-### Exploring the Map
-
-- **Pan**: Click and drag to move around the map
-- **Zoom**: Use the scroll wheel or pinch gestures to zoom in/out
-- **Tilt/Rotate**: Right-click and drag to adjust the 3D view
-
-
-### Interacting with Events
-
-- **Hover** over markers to see a brief summary
-- **Click** on markers to view detailed information and access Wikipedia links
-- **Filter** events by using the year slider at the bottom of the screen
-- **Search** for specific events using the search bar in the top-left corner
-
-
-### Adding New Events
-
-1. Click the "Submit an Event" button in the top-right corner
-2. Fill out the form with the event details:
-
-1. Title
-2. Type (event, building, or person)
-3. Location (latitude and longitude)
-4. Year (use negative values for BCE)
-5. Summary
-6. Wikipedia link
-
-
-
-3. Click "Submit" to add the event
-
-
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
