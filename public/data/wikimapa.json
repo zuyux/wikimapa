@@ -1,0 +1,47 @@
+[
+  {
+    "id": "foundation-of-lima",
+    "type": "event",
+    "location": { "lat": -12.0464, "lon": -77.0428 },
+    "year": 1535,
+    "title": "Foundation of Lima",
+    "summary": "Lima was founded by Spanish conquistador Francisco Pizarro on January 18, 1535.",
+    "wikipedia_link": "https://en.wikipedia.org/wiki/Lima"
+  },
+  {
+    "id": "battle-of-hastings",
+    "type": "event",
+    "location": { "lat": 50.9116, "lon": 0.487 },
+    "year": 1066,
+    "title": "Battle of Hastings",
+    "summary": "The Battle of Hastings was fought between the Norman-French army of William, the Duke of Normandy, and the English army under King Harold Godwinson.",
+    "wikipedia_link": "https://en.wikipedia.org/wiki/Battle_of_Hastings"
+  },
+  {
+    "id": "great-pyramid-of-giza",
+    "type": "building",
+    "location": { "lat": 29.9792, "lon": 31.1342 },
+    "year": -2560,
+    "title": "Great Pyramid of Giza",
+    "summary": "Built around 2560 BC, the Great Pyramid of Giza is the oldest and largest of the pyramids in the Giza pyramid complex.",
+    "wikipedia_link": "https://en.wikipedia.org/wiki/Great_Pyramid_of_Giza"
+  },
+  {
+    "id": "confucius",
+    "type": "person",
+    "location": { "lat": 35.5974, "lon": 117.0014 },
+    "year": -551,
+    "title": "Confucius",
+    "summary": "Confucius was a Chinese philosopher and politician of the Spring and Autumn period, known for his teachings on ethics, family, and society.",
+    "wikipedia_link": "https://en.wikipedia.org/wiki/Confucius"
+  },
+  {
+    "id": "fall-of-berlin-wall",
+    "type": "event",
+    "location": { "lat": 52.5163, "lon": 13.3777 },
+    "year": 1989,
+    "title": "Fall of the Berlin Wall",
+    "summary": "The Berlin Wall, a symbol of the Cold War, fell on November 9, 1989, leading to German reunification.",
+    "wikipedia_link": "https://en.wikipedia.org/wiki/Berlin_Wall"
+  }
+]
