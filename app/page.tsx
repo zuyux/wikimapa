@@ -14,7 +14,7 @@ import MapComponent from "@/components/map-component"
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [yearRange, setYearRange] = useState([-3000, 2023])
+  const [yearRange, setYearRange] = useState([-3000, 2025])
   interface Event {
     title: string
     year: number
@@ -139,9 +139,9 @@ export default function Home() {
               <span>{formatYear(yearRange[1])}</span>
             </div>
             <Slider
-              defaultValue={[-3000, 2023]}
+              defaultValue={[-3000, 2025]}
               min={-3000}
-              max={2023}
+              max={2025}
               step={1}
               value={yearRange}
               onValueChange={handleYearChange}
