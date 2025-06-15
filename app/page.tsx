@@ -14,11 +14,20 @@ import MapComponent from "@/components/map-component"
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [yearRange, setYearRange] = useState([-3000, 2025])
+  const [yearRange, setYearRange] = useState([2020, 2025]) // default range 2020 to 2025
+  const [initialYear, setInitialYear] = useState(2020)     // default initial year 2020
+  const [latestYear, setLatestYear] = useState(2025)       // default latest year 2025
   interface Event {
+    id: string
     title: string
     year: number
-    // Add other properties of your event object here if needed
+    type: string
+    summary: string
+    location: {
+      lat: number
+      lng: number
+    }
+    wikipedia_link: string
   }
 
   const [events, setEvents] = useState<Event[]>([])
@@ -70,6 +79,31 @@ export default function Home() {
     setFilteredEvents(filtered)
   }, [searchTerm, yearRange, events])
 
+  // When initialYear changes, update slider and its placeholder if needed
+  useEffect(() => {
+    setYearRange((prev) => [
+      Math.max(prev[0], initialYear),
+      Math.min(prev[1], latestYear),
+    ])
+  }, [initialYear, latestYear])
+
+  // Add filter for event type
+  const [eventType, setEventType] = useState<string>("all")
+  const eventTypeOptions = [
+    { value: "all", label: "All" },
+    { value: "event", label: "Events" },
+    { value: "person", label: "Humans" },
+    { value: "place", label: "Places" },
+    { value: "building", label: "Structures" },
+  ]
+
+  // Filter events by year and type
+  const filtered = events.filter((event) => {
+    const matchesYear = event.year >= initialYear && event.year <= latestYear
+    const matchesType = eventType === "all" ? true : event.type === eventType
+    return matchesYear && matchesType
+  })
+
   const handleYearChange = (value: number[]) => {
     setYearRange(value)
   }
@@ -98,7 +132,23 @@ export default function Home() {
           </p>
         </div>
       ) : hasEvents ? (
-        <MapComponent events={filteredEvents} />
+        <MapComponent
+          events={filtered
+            .filter(
+              (event) =>
+                typeof event.location?.lng === "number" &&
+                typeof event.location?.lat === "number" &&
+                !isNaN(event.location.lng) &&
+                !isNaN(event.location.lat)
+            )
+            .map((event) => ({
+              ...event,
+              location: {
+                lon: event.location.lng,
+                lat: event.location.lat,
+              },
+            }))}
+        />
       ) : (
         <div className="w-full h-screen flex flex-col items-center justify-center bg-gray-900 text-white">
           <p className="mb-4">No events found</p>
@@ -107,49 +157,82 @@ export default function Home() {
       )}
 
       {/* Search Bar */}
-      <div className="absolute flex top-4 left-4 z-10 w-full md:w-400">
+      <div className="absolute flex top-4 left-4 z-10 w-50">
         <Image src="/wikimapa.svg" alt="Logo" width={21} height={21} className="mr-2 opacity-50" />
         <div className="relative">
           <Input
             type="text"
-            placeholder="Search historical points..."
-            className="bg-gray-900/80 backdrop-blur-sm rounded-lg w-full border-gray-700 text-white"
+            placeholder="Search wikipedia articles..."
+            className="px-4 bg-gray-900/80 backdrop-blur-sm rounded-full w-500 border-gray-700 text-white outline-none"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
 
-      {/* Submit Event Button */}
-      <div className="absolute top-4 right-4 z-10">
+      {/* Submit Event Button 
+      <div className="absolute top-4 right-12 z-10">
         <Button
           onClick={() => setIsModalOpen(true)}
           className="bg-gray-900/80 backdrop-blur-sm hover:bg-gray-800 text-white border border-gray-700 rounded-lg"
         >
           Submit
         </Button>
+      </div>*/}
+
+      {/* Simple filter bar */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 bg-gray-900/80 backdrop-blur-sm px-4 py-3 border-t border-gray-700 flex flex-col md:flex-row md:items-center md:justify-center gap-4">
+        <select
+          className="bg-transparent border border-gray-700 rounded-full px-4 py-1 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={eventType}
+          onChange={e => setEventType(e.target.value)}
+        >
+          {eventTypeOptions.map(opt => (
+            <option key={opt.value} value={opt.value} className="bg-gray-800 text-white">
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <span className="text-white">from</span>
+        <input
+          type="number"
+          className="bg-transparent border border-gray-700 rounded-full px-4 py-1 w-24 text-white"
+          value={initialYear}
+          min={-3000}
+          max={latestYear}
+          onChange={e => {
+            const val = Math.max(-3000, Math.min(Number(e.target.value), latestYear))
+            setInitialYear(val)
+          }}
+        />
+        <span className="text-white">to</span>
+        <input
+          type="number"
+          className="bg-transparent border border-gray-700 rounded-full px-4 py-1 w-24 text-white"
+          value={latestYear}
+          min={initialYear}
+          max={2025}
+          onChange={e => {
+            const val = Math.min(2025, Math.max(Number(e.target.value), initialYear))
+            setLatestYear(val)
+          }}
+        />
       </div>
 
-      {/* Year Slider */}
+      {/* Year Range Slider */}
       {hasEvents && (
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10 w-4/5 max-w-3xl">
-          <div className="bg-gray-900/80 backdrop-blur-sm p-4 rounded-lg border border-gray-700">
-            <div className="flex justify-between mb-2 text-gray-300 text-sm">
-              <span>{formatYear(yearRange[0])}</span>
-              <span>{formatYear(yearRange[1])}</span>
-            </div>
+        <div className="absolute bottom-14 left-0 right-0 z-10">
+          <div className="bg-gray-900/80 backdrop-blur-sm px-4 py-3 rounded-lg border border-gray-700">
             <Slider
-              defaultValue={[-3000, 2025]}
               min={-3000}
               max={2025}
               step={1}
               value={yearRange}
-              onValueChange={handleYearChange}
+              defaultValue={[2020, 2025]}
+              onValueChange={setYearRange}
               className="w-full"
             />
-            <div className="mt-2 text-center text-white text-sm">
-              Showing events from {formatYear(yearRange[0])} to {formatYear(yearRange[1])}
-            </div>
+            {/* ...decade markers if present... */}
           </div>
         </div>
       )}

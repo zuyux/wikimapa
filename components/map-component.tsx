@@ -34,9 +34,11 @@ interface MapComponentProps {
 
 export default function MapComponent({ events }: MapComponentProps) {
   const mapContainer = useRef(null)
-  const map = useRef<maplibregl.Map | null>(null)
+  // Type-only import for maplibregl types
+  type MapLibreMap = typeof import("maplibre-gl")["Map"];
+  const map = useRef<InstanceType<MapLibreMap> | null>(null)
   const [hoveredEvent, setHoveredEvent] = useState<null | (Event & { x: number; y: number })>(null)
-  const markersRef = useRef<Record<string, maplibregl.Marker>>({})
+  const markersRef = useRef<Record<string, any>>({})
   const [mapLoaded, setMapLoaded] = useState(false)
   const [scriptLoaded, setScriptLoaded] = useState(false)
   const [scriptError, setScriptError] = useState<string | null>(null)
@@ -77,44 +79,71 @@ export default function MapComponent({ events }: MapComponentProps) {
         style: `https://api.maptiler.com/maps/satellite/style.json?key=${MAPTILER_API_KEY}`,
         center: [0, 20], // Start at a global view
         zoom: 1.5,
-        pitch: 30, // Give it a slight 3D perspective
+        pitch: 0, // Orthographic (perpendicular) view
+        bearing: 0, // No rotation
         attributionControl: false,
       })
 
-      // Add navigation controls
+      // Add navigation controls to top-right and style them
       if (map.current) {
-        map.current.addControl(new window.maplibregl.NavigationControl(), "bottom-right")
+        const nav = new window.maplibregl.NavigationControl()
+        map.current.addControl(nav, "top-right")
+
+        // Wait for the controls to be rendered, then style them
+        setTimeout(() => {
+          const navControls = document.querySelectorAll('.maplibregl-ctrl-top-right .maplibregl-ctrl')
+          navControls.forEach(ctrl => {
+            (ctrl as HTMLElement).style.background = "#000"
+            ;(ctrl as HTMLElement).style.color = "#fff"
+            ;(ctrl as HTMLElement).style.border = "1px solid #333"
+          })
+          // Style the buttons inside the controls
+          const navButtons = document.querySelectorAll('.maplibregl-ctrl-top-right button')
+          navButtons.forEach(btn => {
+            (btn as HTMLElement).style.background = "#000"
+            ;(btn as HTMLElement).style.color = "#fff"
+            ;(btn as HTMLElement).style.border = "none"
+          })
+        }, 100)
       }
 
       // Add attribution control in a more subtle way
-      map.current.addControl(
-        new window.maplibregl.AttributionControl({
-          compact: true,
-        }),
-        "bottom-left",
-      )
+      if (map.current) {
+        map.current.addControl(
+          new window.maplibregl.AttributionControl({
+            compact: true,
+          }),
+          "bottom-left",
+        )
+      }
 
       // Wait for map to load before adding markers
-      map.current.on("load", () => {
-        // Map is ready
-        console.log("Map loaded successfully")
-        setMapLoaded(true)
-      })
+      if (map.current) {
+        map.current.on("load", () => {
+          // Map is ready
+          console.log("Map loaded successfully")
+          setMapLoaded(true)
+        })
+      }
 
-      map.current.on("click", (e: maplibregl.MapMouseEvent & maplibregl.EventData) => {
-        // Check if the click is on a marker or on the map
-        const features: maplibregl.MapboxGeoJSONFeature[] = map.current.queryRenderedFeatures(e.point)
-        if (features.length === 0) {
-          // Clicked on the map (not on a marker), close the tooltip
-          setClickedEvent(null)
-        }
-      })
+      if (map.current) {
+        map.current.on("click", (e: any) => {
+          // Check if the click is on a marker or on the map
+          const features = map.current!.queryRenderedFeatures(e.point)
+          if (features.length === 0) {
+            // Clicked on the map (not on a marker), close the tooltip
+            setClickedEvent(null)
+          }
+        })
+      }
 
       // Handle map errors
-      map.current.on("error", (e: maplibregl.MapboxEvent & { error?: Error }) => {
-        console.error("Map error:", e)
-        setScriptError("Map initialization error")
-      })
+      if (map.current) {
+        map.current.on("error", (e: any) => {
+          console.error("Map error:", e)
+          setScriptError("Map initialization error")
+        })
+      }
     } catch (error) {
       console.error("Error initializing map:", error)
       if (error instanceof Error) {
