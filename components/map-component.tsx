@@ -1,95 +1,115 @@
 "use client"
 
 import { useRef, useState, useEffect } from "react"
-
-// Extend the Window interface to include maplibregl
-declare global {
-  interface Window {
-    maplibregl: any;
-  }
-}
+import maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import { ExternalLink } from "lucide-react"
-import Script from "next/script"
 
-// MapTiler API key - replace with your own in production
-// For production, use environment variables
-const MAPTILER_API_KEY = process.env.NEXT_PUBLIC_MAPTILER_API_KEY; // Replace with your MapTiler key
+// MapTiler API key
+const MAPTILER_API_KEY = process.env.NEXT_PUBLIC_MAPTILER_API_KEY
 
-interface Event {
-  id: string;
-  type: string;
+interface WikipediaArticle {
+  pageid: number;
   title: string;
-  summary: string;
-  year: number;
-  location: {
-    lon: number;
-    lat: number;
+  extract: string;
+  thumbnail?: {
+    source: string;
+    width: number;
+    height: number;
   };
+  coordinates?: Array<{
+    lat: number;
+    lon: number;
+    primary?: boolean;
+  }>;
   wikipedia_link: string;
 }
 
 interface MapComponentProps {
-  events: Event[];
+  wikipediaArticles?: WikipediaArticle[]
+  onMapMove?: (center: { lat: number; lon: number; zoom: number }) => void
+  isLoading?: boolean
 }
 
-export default function MapComponent({ events }: MapComponentProps) {
-  const mapContainer = useRef(null)
-  // Type-only import for maplibregl types
-  type MapLibreMap = typeof import("maplibre-gl")["Map"];
-  const map = useRef<InstanceType<MapLibreMap> | null>(null)
-  const [hoveredEvent, setHoveredEvent] = useState<null | (Event & { x: number; y: number })>(null)
-  const markersRef = useRef<Record<string, any>>({})
+export default function MapComponent({ wikipediaArticles = [], onMapMove, isLoading = false }: MapComponentProps) {
+  const mapContainer = useRef<HTMLDivElement>(null)
+  const map = useRef<maplibregl.Map | null>(null)
+  const [hoveredArticle, setHoveredArticle] = useState<null | (WikipediaArticle & { x: number; y: number })>(null)
+  const wikipediaMarkersRef = useRef<Record<string, maplibregl.Marker>>({})
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [scriptLoaded, setScriptLoaded] = useState(false)
-  const [scriptError, setScriptError] = useState<string | null>(null)
-  const [clickedEvent, setClickedEvent] = useState<(Event & { x: number; y: number }) | null>(null)
-
-  // Handle script load event
-  const handleScriptLoad = () => {
-    console.log("MapLibre script loaded successfully")
-    setScriptLoaded(true)
-  }
-
-  // Handle script error event
-  const handleScriptError = () => {
-    console.error("Failed to load MapLibre script")
-    setScriptError("Failed to load map library")
-  }
+  const [mapError, setMapError] = useState<string | null>(null)
+  const [clickedArticle, setClickedArticle] = useState<(WikipediaArticle & { x: number; y: number }) | null>(null)
 
   useEffect(() => {
-    // Log when events change
-    console.log(`Received ${events?.length || 0} events`)
-  }, [events])
+    console.log(`Received ${wikipediaArticles?.length || 0} Wikipedia articles`)
+  }, [wikipediaArticles])
 
-  // Initialize map after script is loaded
+  // Initialize map
   useEffect(() => {
-    if (!scriptLoaded || !window.maplibregl) {
-      console.log("Waiting for MapLibre GL JS to load...")
+    if (map.current) return // Map already initialized
+
+    if (!mapContainer.current) {
+      console.error("Map container not available")
+      setMapError("Map container not available")
       return
     }
 
-    if (map.current) return // Map already initialized
+    if (!MAPTILER_API_KEY) {
+      console.error("MapTiler API key is missing!")
+      setMapError("MapTiler API key is missing")
+      return
+    }
 
-    console.log("Initializing map...")
+    console.log("Initializing map with API key:", MAPTILER_API_KEY?.slice(0, 8) + "...")
+
+    // Test MapTiler API connectivity before initializing map
+    const testMapTilerAPI = async () => {
+      try {
+        const testUrl = `https://api.maptiler.com/maps/satellite/style.json?key=${MAPTILER_API_KEY}`
+        console.log("Testing MapTiler API connectivity...")
+        
+        const response = await fetch(testUrl, { 
+          method: 'HEAD',
+          mode: 'no-cors' // Allow CORS preflight
+        })
+        console.log("MapTiler API test completed")
+      } catch (error) {
+        console.warn("MapTiler API test failed (this may be normal):", error)
+      }
+    }
+
+    testMapTilerAPI()
+
+    // Set a timeout to handle stuck loading
+    const loadingTimeout = setTimeout(() => {
+      if (!mapLoaded) {
+        console.error("Map loading timeout")
+        setMapError("Map loading timeout - please refresh the page")
+      }
+    }, 15000) // 15 second timeout
 
     try {
-      // Initialize map with MapLibre GL JS and MapTiler
-      map.current = new window.maplibregl.Map({
+      console.log("Creating MapLibre GL instance...")
+      
+      // Initialize map with MapLibre GL JS and MapTiler - start at Gaza Strip
+      map.current = new maplibregl.Map({
         container: mapContainer.current,
         style: `https://api.maptiler.com/maps/satellite/style.json?key=${MAPTILER_API_KEY}`,
-        center: [0, 20], // Start at a global view
-        zoom: 1.5,
-        pitch: 0, // Orthographic (perpendicular) view
-        bearing: 0, // No rotation
+        center: [34.3088, 31.3547], // Gaza Strip coordinates
+        zoom: 12, // Closer zoom to see articles better
+        pitch: 0,
+        bearing: 0,
         attributionControl: false,
       })
 
-      // Add navigation controls to top-right and style them
+      console.log("MapLibre GL instance created successfully")
+
+      // Add navigation controls
       if (map.current) {
-        const nav = new window.maplibregl.NavigationControl()
+        const nav = new maplibregl.NavigationControl()
         map.current.addControl(nav, "top-right")
 
-        // Wait for the controls to be rendered, then style them
+        // Style the controls
         setTimeout(() => {
           const navControls = document.querySelectorAll('.maplibregl-ctrl-top-right .maplibregl-ctrl')
           navControls.forEach(ctrl => {
@@ -97,7 +117,6 @@ export default function MapComponent({ events }: MapComponentProps) {
             ;(ctrl as HTMLElement).style.color = "#fff"
             ;(ctrl as HTMLElement).style.border = "1px solid #333"
           })
-          // Style the buttons inside the controls
           const navButtons = document.querySelectorAll('.maplibregl-ctrl-top-right button')
           navButtons.forEach(btn => {
             (btn as HTMLElement).style.background = "#000"
@@ -107,141 +126,183 @@ export default function MapComponent({ events }: MapComponentProps) {
         }, 100)
       }
 
-      // Add attribution control in a more subtle way
+      // Add attribution control
       if (map.current) {
         map.current.addControl(
-          new window.maplibregl.AttributionControl({
+          new maplibregl.AttributionControl({
             compact: true,
           }),
           "bottom-left",
         )
       }
 
-      // Wait for map to load before adding markers
+      // Wait for map to load
       if (map.current) {
         map.current.on("load", () => {
-          // Map is ready
-          console.log("Map loaded successfully")
+          console.log("🗺️ Map loaded successfully")
+          clearTimeout(loadingTimeout)
           setMapLoaded(true)
+          setMapError(null)
+          
+          // Add a test marker to verify markers work
+          console.log("🧪 Adding test marker to map")
+          try {
+            const testMarker = new maplibregl.Marker({ color: 'red' })
+              .setLngLat([34.3088, 31.3547]) // Gaza Strip coordinates
+              .addTo(map.current!)
+            console.log("✅ Test marker added successfully")
+          } catch (error) {
+            console.error("❌ Error adding test marker:", error)
+          }
+          
+          // Trigger initial map move to fetch Wikipedia articles
+          if (onMapMove) {
+            onMapMove({ lat: 31.3547, lon: 34.3088, zoom: 12 })
+          }
         })
-      }
 
-      if (map.current) {
+        // Add error handling for map loading
+        map.current.on("error", (e: any) => {
+          console.error("Map loading error:", e)
+          clearTimeout(loadingTimeout)
+          setMapError(`Map loading failed: ${e.error?.message || 'Unknown error'}`)
+        })
+
+        // Add style loading events for debugging
+        map.current.on("style.load", () => {
+          console.log("Map style loaded successfully")
+        })
+
+        map.current.on("sourcedata", (e: any) => {
+          if (e.isSourceLoaded) {
+            console.log("Map source data loaded:", e.sourceId)
+          }
+        })
+
+        // Add map move listener
+        map.current.on("moveend", () => {
+          if (map.current && onMapMove) {
+            const center = map.current.getCenter()
+            const zoom = map.current.getZoom()
+            onMapMove({ lat: center.lat, lon: center.lng, zoom })
+          }
+        })
+
         map.current.on("click", (e: any) => {
-          // Check if the click is on a marker or on the map
           const features = map.current!.queryRenderedFeatures(e.point)
           if (features.length === 0) {
-            // Clicked on the map (not on a marker), close the tooltip
-            setClickedEvent(null)
+            setClickedArticle(null)
           }
         })
       }
 
-      // Handle map errors
-      if (map.current) {
-        map.current.on("error", (e: any) => {
-          console.error("Map error:", e)
-          setScriptError("Map initialization error")
-        })
-      }
     } catch (error) {
       console.error("Error initializing map:", error)
+      clearTimeout(loadingTimeout)
       if (error instanceof Error) {
-        setScriptError(error.message)
+        setMapError(`Map initialization failed: ${error.message}`)
       } else {
-        setScriptError("An unknown error occurred")
+        setMapError("Map initialization failed")
       }
     }
 
-    // Cleanup on unmount
     return () => {
-      if (map.current) {
-        map.current.remove()
-      }
+      clearTimeout(loadingTimeout)
     }
-  }, [scriptLoaded])
+  }, [onMapMove])
 
-  // Handle events changes - add/remove markers
+  // Add Wikipedia article markers
   useEffect(() => {
-    if (!map.current || !mapLoaded || !events || events.length === 0 || !window.maplibregl) return
+    console.log('🔍 Marker effect triggered:', { 
+      hasMap: !!map.current, 
+      mapLoaded, 
+      articlesCount: wikipediaArticles?.length || 0,
+      articles: wikipediaArticles?.slice(0, 2) // Show first 2 articles for debugging
+    })
 
-    // Clear existing markers
-    Object.values(markersRef.current).forEach((marker) => marker.remove())
-    markersRef.current = {}
+    if (!map.current) {
+      console.log('❌ No map reference available')
+      return
+    }
+    
+    if (!mapLoaded) {
+      console.log('❌ Map not loaded yet')
+      return
+    }
+    
+    if (!wikipediaArticles?.length) {
+      console.log('❌ No Wikipedia articles available')
+      return
+    }
 
-    // Add new markers for each event
-    events.forEach((event) => {
-      // Create marker element
-      const el = document.createElement("div")
-      el.className = "marker"
+    console.log(`✅ All conditions met! Adding ${wikipediaArticles.length} Wikipedia article markers to map`)
 
-      // Style based on event type
-      let markerColor
-      switch (event.type) {
-        case "event":
-          markerColor = "#ffffff"
-          break
-        case "building":
-          markerColor = "#ffffff"
-          break
-        case "person":
-          markerColor = "#ffffff"
-          break
-        default:
-          markerColor = "#FFFFFF"
+    // Clear existing Wikipedia markers
+    Object.values(wikipediaMarkersRef.current).forEach(marker => marker.remove())
+    wikipediaMarkersRef.current = {}
+
+    // Add new Wikipedia markers
+    wikipediaArticles.forEach((article, index) => {
+      const coordinates = article.coordinates?.[0]
+      if (!coordinates?.lat || !coordinates?.lon) {
+        console.log(`❌ Skipping article "${article.title}" - no coordinates:`, article.coordinates)
+        return
       }
 
-      el.style.backgroundColor = markerColor
-      el.style.width = "12px"
-      el.style.height = "12px"
-      el.style.borderRadius = "50%"
-      el.style.cursor = "grab" // Change cursor to grab
-      el.style.boxShadow = "0 0 0 2px rgba(0,0,0,0.25)"
-      el.style.transition = "all 0.3s ease"
+      console.log(`✅ Creating marker ${index + 1}/${wikipediaArticles.length} for "${article.title}" at:`, coordinates)
+      
+      try {
+        // Use default MapLibre marker
+        const maplibreMarker = new maplibregl.Marker()
+          .setLngLat([coordinates.lon, coordinates.lat])
+          .addTo(map.current!)
 
-      // Add event listeners
-      el.addEventListener("mouseenter", () => {
-        el.style.transform = "scale(1.5)"
-        el.style.cursor = "grab" // Ensure grab cursor on hover
-        // Only show hover tooltip if no marker is currently clicked
-        if (!clickedEvent) {
-          setHoveredEvent({
-            ...event,
-            x: event.location.lon,
-            y: event.location.lat,
+        console.log(`🎯 Marker created and added to map for "${article.title}"`)
+
+        // Add click event to the default marker
+        maplibreMarker.getElement().addEventListener('click', () => {
+          setClickedArticle({
+            ...article,
+            x: article.coordinates![0].lon,
+            y: article.coordinates![0].lat,
           })
-        }
-      })
-
-      el.addEventListener("mouseleave", () => {
-        el.style.transform = "scale(1)"
-        setHoveredEvent(null)
-      })
-
-      el.addEventListener("click", () => {
-        setClickedEvent({
-          ...event,
-          x: event.location.lon,
-          y: event.location.lat,
         })
-      })
 
-      // Create and store the marker
-      const marker = new window.maplibregl.Marker(el)
-        .setLngLat([event.location.lon, event.location.lat])
-        .addTo(map.current)
+        // Add hover event to the default marker
+        maplibreMarker.getElement().addEventListener('mouseenter', () => {
+          if (!clickedArticle) {
+            setHoveredArticle({
+              ...article,
+              x: article.coordinates![0].lon,
+              y: article.coordinates![0].lat,
+            })
+          }
+        })
+        
+        maplibreMarker.getElement().addEventListener('mouseleave', () => {
+          setHoveredArticle(null)
+        })
 
-      markersRef.current[event.id] = marker
+        wikipediaMarkersRef.current[article.pageid.toString()] = maplibreMarker
+        console.log(`📍 Marker stored in ref for article: ${article.title}`)
+      } catch (error) {
+        console.error(`❌ Error creating marker for "${article.title}":`, error)
+      }
     })
-  }, [events, mapLoaded, clickedEvent])
+  }, [wikipediaArticles, mapLoaded, clickedArticle])
 
-  if (scriptError) {
+  if (mapError) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-gray-900 text-white">
-        <div className="text-center p-4 bg-red-900/20 rounded-lg border border-red-800 max-w-md">
-          <p className="text-lg font-semibold mb-2">Map Error</p>
-          <p className="text-sm text-gray-300">{scriptError}</p>
-          <p className="mt-4 text-xs text-gray-400">Please check your internet connection and try again.</p>
+        <div className="text-center p-6 bg-red-900/20 rounded-lg border border-red-800 max-w-md">
+          <p className="text-lg font-semibold mb-3">Map Loading Error</p>
+          <p className="text-sm text-gray-300 mb-4">{mapError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
+          >
+            Refresh Page
+          </button>
         </div>
       </div>
     )
@@ -249,44 +310,49 @@ export default function MapComponent({ events }: MapComponentProps) {
 
   return (
     <div className="w-full h-screen">
-      {/* Load MapLibre GL JS from CDN with onLoad handler */}
-      <Script
-        src="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.js"
-        onLoad={handleScriptLoad}
-        onError={handleScriptError}
-        strategy="afterInteractive"
-      />
-
-      {!scriptLoaded && (
+      {!mapLoaded && !mapError && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center bg-gray-800/90 backdrop-blur-sm p-8 rounded-lg border border-gray-700 shadow-xl">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
-            <p className="text-white">Loading map library...</p>
+            <p className="text-white mb-2 text-lg font-medium">Loading map...</p>
+            <p className="text-sm text-gray-400 text-center">
+              Initializing MapLibre GL with MapTiler satellite imagery
+            </p>
+            <p className="text-xs text-gray-500 mt-2">
+              This may take a few seconds...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isLoading && mapLoaded && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30">
+          <div className="flex items-center bg-blue-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-lg border border-blue-700 shadow-lg">
+            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-3"></div>
+            <span className="text-sm">Fetching Wikipedia articles...</span>
           </div>
         </div>
       )}
 
       <div ref={mapContainer} className="w-full h-full" />
 
-      {/* Tooltip for hovered event */}
-      {hoveredEvent && !clickedEvent && map.current && mapLoaded && (
+      {/* Wikipedia article hover tooltip */}
+      {hoveredArticle && !clickedArticle && map.current && mapLoaded && (
         <div
-          className="absolute z-20 bg-gray-900/90 backdrop-blur-sm text-white p-3 rounded-lg border border-gray-700 shadow-lg max-w-xs"
+          className="absolute z-20 bg-blue-900/90 backdrop-blur-sm text-white p-3 rounded-lg border border-blue-700 shadow-lg max-w-xs"
           style={{
-            left: map.current.project([hoveredEvent.x, hoveredEvent.y]).x + 10,
-            top: map.current.project([hoveredEvent.x, hoveredEvent.y]).y - 10,
+            left: map.current.project([hoveredArticle.x, hoveredArticle.y]).x + 10,
+            top: map.current.project([hoveredArticle.x, hoveredArticle.y]).y - 10,
             transform: "translate(0, -100%)",
           }}
         >
           <div className="flex justify-between items-start">
-            <h3 className="font-bold text-sm">{hoveredEvent.title}</h3>
-            <span className="text-xs bg-gray-800 px-1.5 py-0.5 rounded ml-2">
-              {hoveredEvent.year < 0 ? `${Math.abs(hoveredEvent.year)} BCE` : `${hoveredEvent.year} CE`}
-            </span>
+            <h3 className="font-bold text-sm">{hoveredArticle.title}</h3>
+            <span className="text-xs bg-blue-800 px-1.5 py-0.5 rounded ml-2">Wikipedia</span>
           </div>
-          <p className="text-xs mt-1 text-gray-300">{hoveredEvent.summary}</p>
+          <p className="text-xs mt-1 text-gray-300">{hoveredArticle.extract.substring(0, 100)}...</p>
           <a
-            href={hoveredEvent.wikipedia_link}
+            href={hoveredArticle.wikipedia_link}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center text-xs mt-2 text-blue-400 hover:text-blue-300"
@@ -296,19 +362,20 @@ export default function MapComponent({ events }: MapComponentProps) {
           </a>
         </div>
       )}
-      {/* Tooltip for clicked event */}
-      {clickedEvent && map.current && mapLoaded && (
+
+      {/* Tooltip for clicked Wikipedia article */}
+      {clickedArticle && map.current && mapLoaded && (
         <div
-          className="absolute z-30 bg-gray-900/95 backdrop-blur-sm text-white p-4 rounded-lg border border-gray-700 shadow-lg max-w-sm"
+          className="absolute z-30 bg-blue-900/95 backdrop-blur-sm text-white p-4 rounded-lg border border-blue-700 shadow-lg max-w-sm"
           style={{
-            left: map.current.project([clickedEvent.x, clickedEvent.y]).x,
-            top: map.current.project([clickedEvent.x, clickedEvent.y]).y + 20,
+            left: map.current.project([clickedArticle.x, clickedArticle.y]).x,
+            top: map.current.project([clickedArticle.x, clickedArticle.y]).y + 20,
             transform: "translate(-50%, 0)",
           }}
         >
           <button
             className="absolute top-2 right-2 text-gray-400 hover:text-white"
-            onClick={() => setClickedEvent(null)}
+            onClick={() => setClickedArticle(null)}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -326,16 +393,20 @@ export default function MapComponent({ events }: MapComponentProps) {
             </svg>
           </button>
           <div className="flex justify-between items-start mb-2">
-            <h3 className="font-bold text-lg">{clickedEvent.title}</h3>
-            <span className="text-xs bg-gray-800 px-2 py-1 rounded ml-2 mt-1">
-              {clickedEvent.year < 0 ? `${Math.abs(clickedEvent.year)} BCE` : `${clickedEvent.year} CE`}
-            </span>
+            <h3 className="font-bold text-lg">{clickedArticle.title}</h3>
+            <span className="text-xs bg-blue-800 px-2 py-1 rounded ml-2 mt-1">Wikipedia</span>
           </div>
-          <p className="text-sm mb-3 text-gray-300">{clickedEvent.summary}</p>
-          <div className="flex justify-between items-center mt-4">
-            <span className="text-xs text-gray-400 capitalize">{clickedEvent.type}</span>
+          {clickedArticle.thumbnail && (
+            <img
+              src={clickedArticle.thumbnail.source}
+              alt={clickedArticle.title}
+              className="w-full h-32 object-cover rounded mb-3"
+            />
+          )}
+          <p className="text-sm mb-3 text-gray-300">{clickedArticle.extract}</p>
+          <div className="flex justify-end items-center mt-4">
             <a
-              href={clickedEvent.wikipedia_link}
+              href={clickedArticle.wikipedia_link}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded"
